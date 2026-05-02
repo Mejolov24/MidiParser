@@ -1,0 +1,23 @@
+{
+  "name": "MidiParser",
+  "version": "1.0.0",
+  "description": "Simple C++ Midi GM 1.0 parser via callback, designed for real time usage",
+  "keywords": "Midi, GM, Parser, MidiParser",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/Mejolov24/MidiParser.git"
+  },
+  "authors":
+  [
+    {
+      "name": "Guillermo Beckers",
+      "email": "beckers.rival@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/Mejolov24/MidiParser",
+  "frameworks": "*",
+  "platforms": "*"
+}
