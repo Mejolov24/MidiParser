@@ -2,24 +2,11 @@
     #define MIDI_PARSER_H
 
 #include <stdint.h>
+#include <MidiType.h>
 
 class MidiParser {
     public:
 
-    struct MidiMessage {
-        uint8_t type;
-        uint8_t channel;
-        uint8_t data1;
-        uint8_t data2;
-
-        // 14-bit pitch bend
-        int16_t getPitchBend() const {
-            if (type == 0xE0) {
-                return (int16_t)((data2 << 7) | data1) - 8192; 
-            }
-            return 0;
-        }
-    };
     typedef void (*MidiCallback)(MidiMessage msg);
 
     MidiParser() : _callback(nullptr), _runningStatus(0), _currentStatus(0), _state(WAIT_STATUS), _data1(0) {}

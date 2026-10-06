@@ -2,6 +2,20 @@
     #define MIDI_T_H
     #include <stdint.h>
 
+    struct MidiMessage {
+        uint8_t type;
+        uint8_t channel;
+        uint8_t data1;
+        uint8_t data2;
+
+        int16_t getPitchBend() const {
+            if (type == 0xE0) {
+                return (int16_t)((data2 << 7) | data1) - 8192; 
+            }
+            return 0;
+        }
+    };
+
     enum MidiType : uint8_t {
         NoteOff              = 0x80,
         NoteOn               = 0x90,
