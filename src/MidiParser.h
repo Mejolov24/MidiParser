@@ -2,20 +2,20 @@
     #define MIDI_PARSER_H
 
 #include <stdint.h>
-#include <MidiType.h>
+
 class MidiParser {
     public:
 
     struct MidiMessage {
-        MidiType type;
+        uint8_t type;
         uint8_t channel;
         uint8_t data1;
         uint8_t data2;
 
         // 14-bit pitch bend
         int16_t getPitchBend() const {
-            if (type == MidiType::PitchBend) {
-                return (int16_t)((data2 << 7) | data1) - 8192; // center for signed data.
+            if (type == 0xE0) {
+                return (int16_t)((data2 << 7) | data1) - 8192; 
             }
             return 0;
         }
@@ -28,8 +28,7 @@ class MidiParser {
 
     void process(uint8_t byte) {
         if (byte >= 0xF8){dispatch(byte,0,0); return;} // realtime
-        uint8_t lsb = byte & 0xF0;
-        uint8_t usb = byte & 0x0F;
+        uint8_t type = byte & 0xF0;
 
         if (_state == WAIT_SYSEX){
             if(byte == 0xF7){
@@ -40,16 +39,19 @@ class MidiParser {
         }
 
         if (byte >= 0x80) { // status byte
-            _runningStatus = byte;
-            if(byte < 0xF0){// 1 byte messages
-                // check for program change or channel pressure (1 byte)
-                if (lsb == 0xC0 ||lsb == 0xD0) {_state = WAIT_DATA1_SINGLE;} else {_state = WAIT_DATA1;}
+            if(byte < 0xF0){// data messages
+                _runningStatus = byte;
+                //TODO: implement current status for keeping special messages
+                // check for program change or channel pressure (1 byte) or multi byte (2 bytes)
+                if (type == 0xC0 ||type == 0xD0) {_state = WAIT_DATA1_SINGLE;} else {_state = WAIT_DATA1;}
             }
             else{
                 bool dispatching = false;
+                if (byte == 0xF0 || byte == 0xF7) {_runningStatus = 0x00;}
                 switch (byte){//system common mesagges
                     
                     case 0xF0: // System Exclusive Start
+                        
                         _state = WAIT_SYSEX;
                         dispatching = true;
                         break;
@@ -112,10 +114,12 @@ private:
 
     void dispatch(uint8_t status, uint8_t d1, uint8_t d2) { // humanize the raw bytes.
         if(_callback){
-            uint8_t typeVal = (status >= 0xF0) ? status : (status & 0xF0); // keep full byte if system message
-            uint8_t chanVal = (status >= 0xF0) ? 0 : (status & 0x0F); // system messages have no channel
-
-            _callback({static_cast<MidiType>(typeVal), chanVal, d1, d2});
+            _callback({
+                (status >= 0xF0) ? status : (status & 0xF0), // keep full byte if system message
+                (status >= 0xF0) ? 0 : (status & 0x0F), // system messages have no channel
+                d1,
+                d2
+            });
         }
     }
 };
