@@ -1,182 +1,127 @@
-#ifndef MIDI_T_H
-    #define MIDI_T_H
-    #include <stdint.h>
+#ifndef MIDI_PARSER_H
+    #define MIDI_PARSER_H
 
-    struct MidiMessage {
-        uint8_t type;
-        uint8_t channel;
-        uint8_t data1;
-        uint8_t data2;
+#include <stdint.h>
+#include <MidiType.h>
 
-        int16_t getPitchBend() const {
-            if (type == 0xE0) {
-                return (int16_t)((data2 << 7) | data1) - 8192; 
+class MidiParser {
+    public:
+
+    typedef void (*MidiCallback)(MidiMessage msg);
+
+    MidiParser() : _callback(nullptr), _runningStatus(0), _currentStatus(0), _state(WAIT_STATUS), _data1(0) {}
+
+    void setCallback(MidiCallback cb) { _callback = cb; }
+
+    void process(uint8_t byte) {
+        if (byte >= 0xF8){dispatch(byte,0,0); return;} // realtime
+        uint8_t type = byte & 0xF0;
+
+        if (_state == WAIT_SYSEX){
+            if(byte == 0xF7){
+                dispatch(0xF7,0,0); // SysexEnd
+                _state = WAIT_STATUS;
             }
-            return 0;
+            return;
         }
-    };
 
-    enum MidiType : uint8_t {
-        NoteOff              = 0x80,
-        NoteOn               = 0x90,
-        Aftertouch           = 0xA0,
-        ControlChange        = 0xB0,
-        ProgramChange        = 0xC0,
-        ChannelPressure      = 0xD0,
-        PitchBend            = 0xE0,
-        SystemExclusive      = 0xF0,
-        TimeCodeQuarterFrame = 0xF1,
-        SongPosition         = 0xF2,
-        SongSelect           = 0xF3,
-        TuneRequest          = 0xF6,
-        EndOfSystemExclusive = 0xF7,
-        TimingClock          = 0xF8,
-        Start                = 0xFA,
-        Continue             = 0xFB,
-        Stop                 = 0xFC,
-        ActiveSensing        = 0xFE,
-        SystemReset          = 0xFF,
-        Unknown              = 0x00
-    };
+        if (byte >= 0x80) { // status byte
+            if(byte < 0xF0){// data messages
+                _runningStatus = byte;
+                _currentStatus = byte;
+                if ((byte & 0xF0) == 0xC0 || (byte & 0xF0) == 0xD0) { _state = WAIT_DATA1_SINGLE;}
+                else {_state = WAIT_DATA1;}
+            }
+            else{
+                bool dispatching = false;
+                switch (byte){//system common mesagges
+                    
+                    case 0xF0: // System Exclusive Start
+                        _runningStatus = 0;
+                        _currentStatus = byte;
+                        _state = WAIT_SYSEX;
+                        dispatching = true;
+                        break;
+                    case 0xF1: // Time Code Quarter Frame (1 data byte)
+                    case 0xF3: // Song Select (1 data byte)
+                        _currentStatus = byte;
+                        _state = WAIT_DATA1_SINGLE;
+                        break;
+                    case 0xF2: // Song Position Pointer (2 data bytes)
+                        _currentStatus = byte;
+                        _state = WAIT_DATA1;
+                        break;
+                    case 0xF6: // Tune Request (0 data bytes)
+                        _state = WAIT_STATUS;
+                        dispatching = true;
+                        break;
+                    case 0xF7: // End of System Exclusive (just in case it's out of band)
+                        _runningStatus = 0;
+                        _currentStatus = 0;
+                        _state = WAIT_STATUS;
+                        dispatching = true;
+                        break;
+                    default:
+                        _state = WAIT_STATUS;
+                        break;
+                }
+                if(dispatching){
+                    dispatch(_currentStatus,0,0);
+                    if(_currentStatus >= 0xF0){_currentStatus = _runningStatus;}
+                }
+            }
+            return;
+        }
+        bool dispatching = false;
+        switch (_state){
+        case WAIT_DATA1:
+            _data1 = byte;
+            _state = WAIT_DATA2;
+            break;
+        case WAIT_DATA1_SINGLE:
+            if(_currentStatus >= 0xF0){_state = WAIT_STATUS;}
+            else {_state = WAIT_DATA1_SINGLE;}
+            dispatching = true;
+            _data1 = byte;
+            byte = 0;
+            break;
+        case WAIT_DATA2:
+            _state = WAIT_DATA1;
+            dispatching = true;
+            break;
+        
+        default:
+            break;
+        }
+        if(dispatching){
+            dispatch(_currentStatus,_data1,byte);
+            if(_currentStatus >= 0xF0){_currentStatus = _runningStatus;}
+        }
+    }
 
-    enum MidiControlChange : uint8_t {
-        // MSB Controllers (0-31)
-        BankSelectMSB				= 0,
-        ModulationWheelMSB			= 1,
-        BreathControllerMSB			= 2,
-        Undefined3MSB				= 3,
-        FootControllerMSB			= 4,
-        PortamentoTimeMSB			= 5,
-        DataEntryMSB				= 6,
-        ChannelVolumeMSB			= 7,
-        BalanceMSB					= 8,
-        Undefined9MSB				= 9,
-        PanMSB						= 10,
-        ExpressionControllerMSB		= 11,
-        EffectControl1MSB			= 12,
-        EffectControl2MSB			= 13,
-        Undefined14MSB				= 14,
-        Undefined15MSB				= 15,
-        GeneralPurposeController1MSB	= 16,
-        GeneralPurposeController2MSB	= 17,
-        GeneralPurposeController3MSB	= 18,
-        GeneralPurposeController4MSB	= 19,
-        Undefined20MSB				= 20,
-        Undefined21MSB				= 21,
-        Undefined22MSB				= 22,
-        Undefined23MSB				= 23,
-        Undefined24MSB				= 24,
-        Undefined25MSB				= 25,
-        Undefined26MSB				= 26,
-        Undefined27MSB				= 27,
-        Undefined28MSB				= 28,
-        Undefined29MSB				= 29,
-        Undefined30MSB				= 30,
-        Undefined31MSB				= 31,
+private:
+    MidiCallback _callback;
+    uint8_t _runningStatus;
+    uint8_t _currentStatus;
+    uint8_t _data1;
+    enum State {
+        WAIT_STATUS,
+        WAIT_DATA1,
+        WAIT_DATA1_SINGLE,
+        WAIT_DATA2,
+        WAIT_SYSEX
+    } _state;
 
-        // LSB Controllers (32-63)
-        BankSelectLSB				= 32,
-        ModulationWheelLSB			= 33,
-        BreathControllerLSB			= 34,
-        Undefined3LSB				= 35,
-        FootControllerLSB			= 36,
-        PortamentoTimeLSB			= 37,
-        DataEntryLSB				= 38,
-        ChannelVolumeLSB			= 39,
-        BalanceLSB					= 40,
-        Undefined9LSB				= 41,
-        PanLSB						= 42,
-        ExpressionControllerLSB		= 43,
-        EffectControl1LSB			= 44,
-        EffectControl2LSB			= 45,
-        Undefined14LSB				= 46,
-        Undefined15LSB				= 47,
-        GeneralPurposeController1LSB	= 48,
-        GeneralPurposeController2LSB	= 49,
-        GeneralPurposeController3LSB	= 50,
-        GeneralPurposeController4LSB	= 51,
-        Undefined20LSB				= 52,
-        Undefined21LSB				= 53,
-        Undefined22LSB				= 54,
-        Undefined23LSB				= 55,
-        Undefined24LSB				= 56,
-        Undefined25LSB				= 57,
-        Undefined26LSB				= 58,
-        Undefined27LSB				= 59,
-        Undefined28LSB				= 60,
-        Undefined29LSB				= 61,
-        Undefined30LSB				= 62,
-        Undefined31LSB				= 63,
-
-        // Switches, Sound Controllers, Effects (64-95)
-        DamperPedal					= 64,
-        PortamentoOnOff				= 65,
-        Sostenuto					= 66,
-        SoftPedalOnOff				= 67,
-        LegatoFootswitch				= 68,
-        Hold2						= 69,
-        SoundController1				= 70,
-        SoundController2				= 71,
-        SoundController3				= 72,
-        SoundController4				= 73,
-        SoundController5				= 74,
-        SoundController6				= 75,
-        SoundController7				= 76,
-        SoundController8				= 77,
-        SoundController9				= 78,
-        SoundController10				= 79,
-        GeneralPurposeController5		= 80,
-        GeneralPurposeController6		= 81,
-        GeneralPurposeController7		= 82,
-        GeneralPurposeController8		= 83,
-        PortamentoControl				= 84,
-        Undefined85					= 85,
-        Undefined86					= 86,
-        Undefined87					= 87,
-        HighResolutionVelocityPrefix	= 88,
-        Undefined89					= 89,
-        Undefined90					= 90,
-        Effects1Depth					= 91,
-        Effects2Depth					= 92,
-        Effects3Depth					= 93,
-        Effects4Depth					= 94,
-        Effects5Depth					= 95,
-
-        // Data / Parameter Controllers (96-119)
-        DataIncrement					= 96,
-        DataDecrement					= 97,
-        NRPNLSB						= 98,
-        NRPNMSB						= 99,
-        RPNLSB						= 100,
-        RPNMSB						= 101,
-        Undefined102					= 102,
-        Undefined103					= 103,
-        Undefined104					= 104,
-        Undefined105					= 105,
-        Undefined106					= 106,
-        Undefined107					= 107,
-        Undefined108					= 108,
-        Undefined109					= 109,
-        Undefined110					= 110,
-        Undefined111					= 111,
-        Undefined112					= 112,
-        Undefined113					= 113,
-        Undefined114					= 114,
-        Undefined115					= 115,
-        Undefined116					= 116,
-        Undefined117					= 117,
-        Undefined118					= 118,
-        Undefined119					= 119,
-
-        // Channel Mode Messages (120-127)
-        AllSoundOff					= 120,
-        ResetAllControllers			= 121,
-        LocalControlOnOff				= 122,
-        AllNotesOff					= 123,
-        OmniModeOff					= 124,
-        OmniModeOn					= 125,
-        MonoModeOn					= 126,
-        PolyModeOn					= 127
-    };
+    void dispatch(uint8_t status, uint8_t d1, uint8_t d2) { // humanize the raw bytes.
+        if(_callback){
+            _callback({
+                static_cast<uint8_t>(status >= 0xF0) ? status : (status & 0xF0), // keep full byte if system message
+                static_cast<uint8_t>(status >= 0xF0) ? 0 : (status & 0x0F), // system messages have no channel
+                d1,
+                d2
+            });
+        }
+    }
+};
 
 #endif
