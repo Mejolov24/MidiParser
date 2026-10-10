@@ -29,6 +29,8 @@ class MidiParser {
             if(byte < 0xF0){// data messages
                 _runningStatus = byte;
                 _currentStatus = byte;
+                if ((byte & 0xF0) == 0xC0 || (byte & 0xF0) == 0xD0) { _state = WAIT_DATA1_SINGLE;}
+                else {_state = WAIT_DATA1;}
             }
             else{
                 bool dispatching = false;
@@ -113,8 +115,8 @@ private:
     void dispatch(uint8_t status, uint8_t d1, uint8_t d2) { // humanize the raw bytes.
         if(_callback){
             _callback({
-                (status >= 0xF0) ? status : (status & 0xF0), // keep full byte if system message
-                (status >= 0xF0) ? 0 : (status & 0x0F), // system messages have no channel
+                static_cast<uint8_t>(status >= 0xF0 ? status : (status & 0xF0)), // keep full byte if system message
+                static_cast<uint8_t>(status >= 0xF0 ? 0 : (status & 0x0F)), // system messages have no channel
                 d1,
                 d2
             });
