@@ -1,34 +1,49 @@
 # MidiParser
-Simple C++ Midi GM 1.0 parser via callback
+Simple C++ Midi GM 1.0 parser via callback, provides a helper file "MidiType.h" with enums for the Midi Data and ther respective value.
 
 ## Usage
 First, declare your callback and assing it via setCallback()
 Then, send individual midi bytes to process()
-When data is parsed, the callback will be called.
+When data finishes parsing, the callback will be called.
 
 ## Midi message
 ```cpp
-enum class MidiType : uint8_t {
-    NoteOff           = 0x80,
-    NoteOn            = 0x90,
-    Aftertouch        = 0xA0,
-    ControlChange     = 0xB0,
-    ProgramChange     = 0xC0,
-    ChannelPressure   = 0xD0,
-    PitchBend         = 0xE0,
-    SystemMessage     = 0xF0,
-    Unknown           = 0x00
+
+enum MidiType : uint8_t {
+    NoteOff              = 0x80,
+    NoteOn               = 0x90,
+    Aftertouch           = 0xA0,
+    ControlChange        = 0xB0,
+    ProgramChange        = 0xC0,
+    ChannelPressure      = 0xD0,
+    PitchBend            = 0xE0,
+    SystemExclusive      = 0xF0,
+    TimeCodeQuarterFrame = 0xF1,
+    SongPosition         = 0xF2,
+    SongSelect           = 0xF3,
+    TuneRequest          = 0xF6,
+    EndOfSystemExclusive = 0xF7,
+    TimingClock          = 0xF8,
+    Start                = 0xFA,
+    Continue             = 0xFB,
+    Stop                 = 0xFC,
+    ActiveSensing        = 0xFE,
+    SystemReset          = 0xFF,
+    Unknown              = 0x00
 };
 ```
+
+## Control Changes
+There are many control changes, please check the "MidiType.h" header file.
 
 ## Midi Type
 ```cpp
 struct MidiMessage {
-    MidiType type;
+    uint8_t type;
     uint8_t channel;
     uint8_t data1;
     uint8_t data2;
-    int16_t getPitchBend() // Helper to get 14-bit pitch bend,shift to the left and fill gap, getting 14-bits
+    int16_t getPitchBend() // Helper to get 14-bit pitch bend
 };
 ```
 
@@ -39,7 +54,9 @@ struct MidiMessage {
 MidiParser mp;
 
 void ProcessMidi(MidiMessage msg) {
-    switch (msg.type) {  
+    MidiType message = static_cast<MidiType>(msg.type);
+    MidiControlChange control = static_cast<MidiControlChange>(msg.data1);
+    switch (message) {  
         case MidiType::NoteOn:
             std::cout << "Note ON recieved :" << "Channel : " << (int)msg.channel << "Note" << (int)msg.data1 << "Velocity" << (int)msg.data2 << std::endl;
             break;

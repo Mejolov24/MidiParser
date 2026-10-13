@@ -1,6 +1,6 @@
 {
   "name": "MidiParser",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Simple C++ Midi GM 1.0 parser via callback, designed for real time usage",
   "keywords": "Midi, GM, Parser, MidiParser",
   "repository":
